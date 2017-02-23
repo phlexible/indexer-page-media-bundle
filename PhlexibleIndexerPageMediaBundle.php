@@ -9,7 +9,7 @@
  * file that was distributed with this source code.
  */
 
-namespace Phlexible\Bundle\IndexerElementMediaBundle;
+namespace Phlexible\Bundle\IndexerPageMediaBundle;
 
 use Symfony\Component\HttpKernel\Bundle\Bundle;
 
