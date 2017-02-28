@@ -11,8 +11,8 @@
 
 namespace Phlexible\Bundle\IndexerPageMediaBundle\Event;
 
+use Elastica\Result;
 use Phlexible\Bundle\IndexerMediaBundle\Document\MediaDocument;
-use Phlexible\Bundle\IndexerPageBundle\Document\PageDocument;
 use Symfony\Component\EventDispatcher\Event;
 
 /**
@@ -28,15 +28,15 @@ class MapDocumentEvent extends Event
     private $mediaDocument;
 
     /**
-     * @var PageDocument
+     * @var Result
      */
     private $pageDocument;
 
     /**
      * @param MediaDocument $mediaDocument
-     * @param PageDocument  $pageDocument
+     * @param Result        $pageDocument
      */
-    public function __construct(MediaDocument $mediaDocument, PageDocument $pageDocument)
+    public function __construct(MediaDocument $mediaDocument, Result $pageDocument)
     {
         $this->mediaDocument   = $mediaDocument;
         $this->pageDocument = $pageDocument;
@@ -51,7 +51,7 @@ class MapDocumentEvent extends Event
     }
 
     /**
-     * @return PageDocument
+     * @return Result
      */
     public function getPageDocument()
     {

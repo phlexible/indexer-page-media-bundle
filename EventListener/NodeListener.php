@@ -47,9 +47,9 @@ class NodeListener implements EventSubscriberInterface
     public static function getSubscribedEvents()
     {
         return array(
-            TreeEvents::SET_NODE_OFFLINE           => 'onSetNodeOffline',
-            TreeEvents::DELETE_NODE                => 'onDeleteNode',
-            IndexerEvents::STORAGE_ADD_DOCUMENT    => 'onUpdateDocument',
+            TreeEvents::SET_NODE_OFFLINE => 'onSetNodeOffline',
+            TreeEvents::DELETE_NODE => 'onDeleteNode',
+            IndexerEvents::STORAGE_ADD_DOCUMENT => 'onUpdateDocument',
             IndexerEvents::STORAGE_UPDATE_DOCUMENT => 'onUpdateDocument',
         );
     }
@@ -70,11 +70,11 @@ class NodeListener implements EventSubscriberInterface
     {
         $document = $event->getDocument();
 
-        if (!$document instanceof ElementDocument) {
+        if (!$document instanceof PageDocument) {
             return;
         }
 
-        $this->queueUpdateElementData($document->getValue('eid'));
+        $this->queueUpdateElementData($document->get('typeId'));
     }
 
     /**
@@ -84,18 +84,19 @@ class NodeListener implements EventSubscriberInterface
     {
         $node = $event->getNode();
 
-        $this->queueUpdateElementData($node->getEid());
+        $this->queueUpdateElementData($node->getTypeId());
     }
 
     /**
      * Schedule document update.
      *
-     * @param integer $eid
+     * @param int $eid
      */
     private function queueUpdateElementData($eid)
     {
-        $job = new Job('indexer-element-media:update-element-data', array("--eid $eid"));
+        $job = new Job('indexer-page-media:update-element-data', array("--eid $eid"));
 
-        $this->jobManager->updateQueueItem($job);
+        echo 'update queue item'.PHP_EOL;
+        //$this->jobManager->updateQueueItem($job);
     }
 }

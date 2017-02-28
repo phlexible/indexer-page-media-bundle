@@ -26,7 +26,6 @@ use Symfony\Component\Console\Output\OutputInterface;
  */
 class UpdatePageDataCommand extends ContainerAwareCommand
 {
-
     /**
      * {@inheritdoc}
      */

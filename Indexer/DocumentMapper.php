@@ -12,15 +12,21 @@
 namespace Phlexible\Bundle\IndexerPageMediaBundle\Indexer;
 
 use Doctrine\DBAL\Connection;
-use Phlexible\Bundle\IndexerBundle\Document\DocumentInterface;
+use Elastica\Filter\Term;
+use Elastica\Query;
+use Elastica\Result;
+use Phlexible\Bundle\ElasticaBundle\Elastica\Index;
 use Phlexible\Bundle\IndexerPageBundle\Document\PageDocument;
 use Phlexible\Bundle\IndexerPageMediaBundle\Event\MapDocumentEvent;
 use Phlexible\Bundle\IndexerPageMediaBundle\IndexerPageMediaEvents;
 use Phlexible\Bundle\IndexerMediaBundle\Document\MediaDocument;
-use Phlexible\Bundle\MediaSiteBundle\Site\SiteManager;
 use Phlexible\Bundle\SiterootBundle\Entity\Siteroot;
 use Phlexible\Bundle\SiterootBundle\Model\SiterootManagerInterface;
 use Phlexible\Bundle\TreeBundle\Tree\TreeManager;
+use Phlexible\Component\MediaManager\Usage\FileUsageManager;
+use Phlexible\Component\MediaManager\Usage\FolderUsageManager;
+use Phlexible\Component\Volume\Model\FileInterface;
+use Phlexible\Component\Volume\VolumeManager;
 use Symfony\Component\EventDispatcher\EventDispatcherInterface;
 
 /**
@@ -41,7 +47,7 @@ class DocumentMapper
     private $dispatcher;
 
     /**
-     * @var VolumeManagerInterface
+     * @var VolumeManager
      */
     private $volumeManager;
 
@@ -51,14 +57,14 @@ class DocumentMapper
     private $treeManager;
 
     /**
-     * @var FileUsage
+     * @var FileUsageManager
      */
-    private $fileUsage;
+    private $fileUsageManager;
 
     /**
-     * @var FolderUsage
+     * @var FolderUsageManager
      */
-    private $folderUsage;
+    private $folderUsageManager;
 
     /**
      * @var SiterootManagerInterface
@@ -66,68 +72,86 @@ class DocumentMapper
     private $siterootManager;
 
     /**
+     * @var Index
+     */
+    private $index;
+
+    /**
      * @param Connection               $connection
      * @param EventDispatcherInterface $dispatcher
-     * @param VolumeManagerInterface   $volumeManager
+     * @param VolumeManager            $volumeManager
      * @param TreeManager              $treeManager
-     * @param FileUsage                $fileUsage
-     * @param FolderUsage              $folderUsage
+     * @param FileUsageManager         $fileUsageManager
+     * @param FolderUsageManager       $folderUsageManager
      * @param SiterootManagerInterface $siterootManager
+     * @param Index                    $index
      */
     public function __construct(
         Connection $connection,
         EventDispatcherInterface $dispatcher,
-        VolumeManagerInterface $volumeManager,
+        VolumeManager $volumeManager,
         TreeManager $treeManager,
-        FileUsage $fileUsage,
-        FolderUsage $folderUsage,
-        SiterootManagerInterface $siterootManager
+        FileUsageManager $fileUsageManager,
+        FolderUsageManager $folderUsageManager,
+        SiterootManagerInterface $siterootManager,
+        Index $index
     ) {
         $this->connection = $connection;
         $this->dispatcher = $dispatcher;
         $this->volumeManager = $volumeManager;
         $this->treeManager = $treeManager;
-        $this->fileUsage = $fileUsage;
-        $this->folderUsage = $folderUsage;
+        $this->fileUsageManager = $fileUsageManager;
+        $this->folderUsageManager = $folderUsageManager;
         $this->siterootManager = $siterootManager;
+        $this->index = $index;
     }
 
     /**
      * Add element information to document
      *
      * @param MediaDocument $mediaDocument
+     * @param FileInterface $file
      */
-    public function applyPageDataToMediaDocument(MediaDocument $mediaDocument)
+    public function applyPageDataToMediaDocument(MediaDocument $mediaDocument, FileInterface $file)
     {
-        $fields = array('eids', 'tids', 'siteroots', 'languages', 'context', 'restricted');
+        $fields = array('typeIds', 'nodeIds', 'siterootIds', 'languages');
 
         foreach ($fields as $field) {
-            unset($mediaDocument[$field]);
+            $mediaDocument->set($field, '');
         }
 
-        $assetType = $mediaDocument->getValue('asset_type');
+        $mediaType = $mediaDocument->get('media_type');
 
-        $eids = $this->fetchEidsByUsage($mediaDocument);
+        $eids = $this->fetchNodeIdsByUsage($mediaDocument, $file);
 
         foreach ($eids as $eid) {
-            $this->elementsQueryEid->parseInput($eid);
+            $results = $this->findPageDocuments($eid);
 
-            $results = $this->indexerSearch->query($this->elementsQueryEid);
+            foreach ($results as $result) {
+                /* @var $result Result */
+                $siterootId = $result->getData()['siterootId'];
+                $siteroot   = $this->siterootManager->find($siterootId);
 
-            foreach ($results as $pageDocument) {
-                /* @var $pageDocument PageDocument */
-                $siterootId = $pageDocument->getValue('siteroot');
-                $siteroot   = $this->siterootManager->getById($siterootId);
-
-                if (!$this->isAssetTypeIndexible($siteroot, $assetType)) {
+                if (!$this->isAssetTypeIndexible($siteroot, $mediaType)) {
                     continue;
                 }
 
-                if ($this->elementContainsFile($mediaDocument, $pageDocument)) {
-                    $this->applyPageFields($mediaDocument, $pageDocument);
+                if ($this->elementContainsFile($mediaDocument, $result, $siteroot)) {
+                    $this->applyPageFields($mediaDocument, $result);
                 }
             }
         }
+    }
+
+    private function findPageDocuments($nodeId)
+    {
+        $query = new Query();
+        $filter = new Term();
+        $filter->setTerm('typeId', $nodeId);
+        $query->setPostFilter($filter);
+        $resultSet = $this->index->getType('page')->search($query);
+
+        return $resultSet;
     }
 
     /**
@@ -138,8 +162,11 @@ class DocumentMapper
      *
      * @return boolean
      */
-    public function isAssetTypeIndexible(Siteroot $siteroot, $type)
+    private function isAssetTypeIndexible(Siteroot $siteroot, $type)
     {
+        return true;
+
+        // TODO: fix properties
         $key = 'indexer.elements.media.' . strtolower($type);
 
         $value = (boolean) $siteroot->getProperty($key);
@@ -154,7 +181,7 @@ class DocumentMapper
      *
      * @return boolean
      */
-    public function scanFolderRecursive(Siteroot $siteroot)
+    private function scanFolderRecursive(Siteroot $siteroot)
     {
         $value = (boolean) $siteroot->getProperty('indexer.elements.media.folder.recursiv');
 
@@ -168,7 +195,7 @@ class DocumentMapper
      *
      * @return boolean
      */
-    public function isFileIndexingEnabled(Siteroot $siteroot)
+    private function isFileIndexingEnabled(Siteroot $siteroot)
     {
         return $this->isAssetTypeIndexible($siteroot, 'audio')
             || $this->isAssetTypeIndexible($siteroot, 'document')
@@ -185,7 +212,7 @@ class DocumentMapper
      *
      * @return boolean
      */
-    public function isFieldTypeIndexible(Siteroot $siteroot, $type)
+    private function isFieldTypeIndexible(Siteroot $siteroot, $type)
     {
         $key = 'indexer.elements.media.field.' . strtolower($type);
 
@@ -201,7 +228,7 @@ class DocumentMapper
      *
      * @return array
      */
-    public function getIndexibleFieldTypes(Siteroot $siteroot)
+    private function getIndexibleFieldTypes(Siteroot $siteroot)
     {
         $fieldTypes = array('file', 'folder');
 
@@ -217,19 +244,18 @@ class DocumentMapper
 
     /**
      * @param MediaDocument $mediaDocument
+     * @param FileInterface $file
      *
      * @return array
      */
-    private function fetchEidsByUsage(MediaDocument $mediaDocument)
+    private function fetchNodeIdsByUsage(MediaDocument $mediaDocument, FileInterface $file)
     {
         $parentFolderIds = $mediaDocument->get('parent_folder_ids');
-        $fileId          = $mediaDocument->get('file_id');
-        $fileVersion     = $mediaDocument->get('file_version');
 
         $eids = array_unique(
             array_merge(
-                $this->fetchEidsWhereFileIsUsedIn($fileId, $fileVersion),
-                $this->fetchEidsWhereParentFolderOfFileIsUsedIn($parentFolderIds)
+                $this->fetchNodeIdsWhereFileIsUsedIn($file),
+                $this->fetchNodeIdsWhereParentFolderOfFileIsUsedIn($file, $parentFolderIds)
             )
         );
 
@@ -237,20 +263,15 @@ class DocumentMapper
     }
 
     /**
-     * @param string $fileId
-     * @param int    $fileVersion
+     * @param FileInterface $file
      *
-     * @return int
+     * @return array
      */
-    private function fetchEidsWhereFileIsUsedIn($fileId, $fileVersion)
+    private function fetchNodeIdsWhereFileIsUsedIn(FileInterface $file)
     {
-        $fileUsages = $this->fileUsage->getAllByFileId(
-            $fileId,
-            $fileVersion,
-            FileUsage::STATUS_ONLINE
-        );
+        $fileUsages = $this->fileUsageManager->getUsedIn($file);
 
-        return ArrayUtil::column($fileUsages, 'usage_id', true, true);
+        return array_column($fileUsages, 'usage_id');
     }
 
     /**
@@ -258,9 +279,12 @@ class DocumentMapper
      *
      * @return array
      */
-    private function fetchEidsWhereParentFolderOfFileIsUsedIn(array $parentFolderIds)
+    private function fetchNodeIdsWhereParentFolderOfFileIsUsedIn(FileInterface $file, array $parentFolderIds)
     {
-        $folderUsages = $this->folderUsage->getAllByStatus(FolderUsage::STATUS_ONLINE);
+        // TODO: weird
+        return array();
+
+        $folderUsages = $this->folderUsageManager->getUsedIn(FolderUsage::STATUS_ONLINE);
 
         $eids = array();
         foreach ($folderUsages as $usage) {
@@ -274,29 +298,31 @@ class DocumentMapper
 
     /**
      * @param MediaDocument $mediaDocument
-     * @param PageDocument  $pageDocument
+     * @param Result        $pageDocument
+     * @param Siteroot      $siteroot
      *
      * @return bool
      */
-    private function elementContainsFile(MediaDocument $mediaDocument, PageDocument $pageDocument)
+    private function elementContainsFile(MediaDocument $mediaDocument, Result $pageDocument, Siteroot $siteroot)
     {
-        $siterootId = $pageDocument->get('siteroot');
-        $language   = $pageDocument->get('language');
-        $tid        = $pageDocument->get('tid');
-        $eid        = $pageDocument->get('eid');
+        $data = $pageDocument->getData();
+        $siterootId = $data['siterootId'];
+        $language = $data['language'];
+        $nodeId = $data['nodeId'];
+        $typeId = $data['typeId'];
 
-        $tree          = $this->treeManager->getBySiteRootId($siterootId);
-        $onlineVersion = $tree->getOnlineVersion($tid, $language);
-        $siteroot      = $tree->getSiteRoot();
+        $tree = $this->treeManager->getBySiteRootId($siterootId);
+        $node = $tree->get($nodeId);
+        $onlineVersion = $tree->getPublishedVersion($node, $language);
 
         if (!$onlineVersion) {
             return false;
         }
 
-        $folderId        = $mediaDocument->getValue('folder_id');
-        $fileId          = $mediaDocument->getValue('file_id');
-        $fileVersion     = $mediaDocument->getValue('file_version');
-        $parentFolderIds = $mediaDocument->getValue('parent_folder_ids');
+        $folderId        = $mediaDocument->get('folder_id');
+        $fileId          = $mediaDocument->get('file_id');
+        $fileVersion     = $mediaDocument->get('file_version');
+        $parentFolderIds = $mediaDocument->get('parent_folder_ids');
 
 
         if ($this->scanFolderRecursive($siteroot)) {
@@ -306,59 +332,46 @@ class DocumentMapper
             $mediaIds = array("$fileId;$fileVersion", $folderId);
         }
 
-        $db = $this->dbPool->read;
+        $qb = $this->connection->createQueryBuilder();
 
-        $select = $db->select()
-            ->from(array('edl' => $db->prefix . 'element_data_language'), 'eid')
-            ->where('edl.eid = ?', $eid)
-            ->where('edl.language = ?', $language)
-            ->where('edl.version = ?', $onlineVersion)
-            ->where('edl.content IN (?)', $mediaIds)
-            ->limit(1);
+        foreach ($mediaIds as $index => $mediaId) {
+            $mediaIds[$index] = $qb->expr()->literal($mediaId);
+        }
+
+        $qb
+            ->select('esv.id')
+            ->from('element_structure_value', 'esv')
+            ->where($qb->expr()->eq('esv.eid', $typeId))
+            ->andWhere($qb->expr()->eq('esv.language', $qb->expr()->literal($language)))
+            ->andWhere($qb->expr()->eq('esv.version', $onlineVersion))
+            ->andWhere($qb->expr()->in('esv.content', $mediaIds))
+            ->setMaxResults(1);
 
         $indexibleFieldTypes = $this->getIndexibleFieldTypes($siteroot);
 
         if (count($indexibleFieldTypes)) {
-            $select
-                ->join(
-                    array('ed' => $db->prefix . 'element_data'),
-                    'ed.data_id = edl.data_id AND ed.eid = edl.eid AND ed.version = edl.version',
-                    array()
-                )
-                ->join(
-                    array('ets' => $db->prefix . 'elementtype_structure'),
-                    'ets.ds_id = ed.ds_id',
-                    array()
-                )
-                ->where('ets.field_type in (?)', $indexibleFieldTypes);
+            $qb->andWhere($qb->expr()->in('esv.type', $indexibleFieldTypes));
         }
 
-        $result = (integer) $db->fetchOne($select);
+        $result = $this->connection->fetchAssoc($qb->getSQL());
 
-        return 0 !== $result;
+        return (bool) $result;
     }
 
     /**
      * @param MediaDocument $mediaDocument
-     * @param PageDocument  $pageDocument
+     * @param Result        $pageDocument
      */
-    private function applyPageFields(MediaDocument $mediaDocument, PageDocument $pageDocument)
+    private function applyPageFields(MediaDocument $mediaDocument, Result $pageDocument)
     {
         $mapping = array(
-            'eids'      => 'eid',
-            'tids'      => 'tid',
-            'siteroots' => 'siteroot',
+            'typeIds' => 'typeId',
+            'nodeIds' => 'nodeId',
+            'siterootIds' => 'siterootId',
             'languages' => 'language',
-            'context'   => 'context',
         );
 
         $this->mergeFields($mediaDocument, $pageDocument, $mapping);
-
-        if ('1' == $pageDocument->getValue('restricted')) {
-            $mediaDocument->setValue('restricted', 1);
-        } else {
-            $mediaDocument->setValue('restricted', 0);
-        }
 
         $event = new MapDocumentEvent($mediaDocument, $pageDocument);
         $this->dispatcher->dispatch(IndexerPageMediaEvents::MAP_DOCUMENT, $event);
@@ -366,10 +379,10 @@ class DocumentMapper
 
     /**
      * @param MediaDocument $mediaDocument
-     * @param PageDocument  $pageDocument
+     * @param Result        $pageDocument
      * @param array         $mapping
      */
-    private function mergeFields(MediaDocument $mediaDocument, PageDocument $pageDocument, array $mapping)
+    private function mergeFields(MediaDocument $mediaDocument, Result $pageDocument, array $mapping)
     {
         foreach ($mapping as $mediaField => $elementField) {
             $this->mergeField($mediaDocument, $mediaField, $pageDocument, $elementField);
@@ -379,20 +392,21 @@ class DocumentMapper
     /**
      * @param MediaDocument $mediaDocument
      * @param string        $mediaField
-     * @param PageDocument  $pageDocument
+     * @param Result        $pageDocument
      * @param string        $elementField
      */
-    private function mergeField(
-        MediaDocument $mediaDocument,
-        $mediaField,
-        PageDocument $pageDocument,
-        $elementField
-    ) {
-        $mediaValue   = (array) $mediaDocument->getValue($mediaField);
-        $elementValue = (array) $pageDocument->getValue($elementField);
+    private function mergeField(MediaDocument $mediaDocument, $mediaField, Result $pageDocument, $elementField)
+    {
+        $mediaValue   = $mediaDocument->get($mediaField);
+        if ($mediaValue) {
+            $mediaValue = (array) $mediaValue;
+        } else {
+            $mediaValue = array();
+        }
+        $elementValue = (array) $pageDocument->getData()[$elementField];
 
         $newValue = array_unique(array_merge($mediaValue, $elementValue));
 
-        $mediaDocument->setValue($mediaField, $newValue);
+        $mediaDocument->set($mediaField, $newValue);
     }
 }

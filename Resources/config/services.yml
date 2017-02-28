@@ -8,15 +8,20 @@ services:
             - @phlexible_tree.tree_manager
             - @phlexible_media_manager.file_usage_manager
             - @phlexible_media_manager.folder_usage_manager
-            - @doctrine.orm.entity_manager
+            - @phlexible_siteroot.siteroot_manager
+            - @phlexible_indexer_storage_elastica.index
 
     # event listeners
     phlexible_indexer_page_media.document_listener:
         class: Phlexible\Bundle\IndexerPageMediaBundle\EventListener\DocumentListener
+        arguments:
+            - "@phlexible_indexer_page_media.mapper"
         tags:
             - {name: kernel.event_subscriber}
 
     phlexible_indexer_page_media.node_listener:
         class: Phlexible\Bundle\IndexerPageMediaBundle\EventListener\NodeListener
+        arguments:
+            - "@phlexible_queue.job_manager"
         tags:
             - {name: kernel.event_subscriber}

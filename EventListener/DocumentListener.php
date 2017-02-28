@@ -13,7 +13,8 @@ namespace Phlexible\Bundle\IndexerPageMediaBundle\EventListener;
 
 use Phlexible\Bundle\IndexerBundle\Document\DocumentInterface;
 use Phlexible\Bundle\IndexerBundle\IndexerEvents;
-use Phlexible\Bundle\IndexerPageMediaBundle\Event\MapDocumentEvent;
+use Phlexible\Bundle\IndexerMediaBundle\Event\MapDocumentEvent;
+use Phlexible\Bundle\IndexerMediaBundle\IndexerMediaEvents;
 use Phlexible\Bundle\IndexerBundle\Event\DocumentEvent;
 use Phlexible\Bundle\IndexerPageMediaBundle\Indexer\DocumentMapper;
 use Phlexible\Bundle\IndexerMediaBundle\Document\MediaDocument;
@@ -46,7 +47,7 @@ class DocumentListener implements EventSubscriberInterface
     {
         return array(
             IndexerEvents::CREATE_DOCUMENT => 'onCreateDocument',
-            //IndexerEvents::MAP_DOCUMENT    => 'onMapDocument',
+            IndexerMediaEvents::MAP_DOCUMENT => 'onMapDocument',
         );
     }
 
@@ -62,11 +63,10 @@ class DocumentListener implements EventSubscriberInterface
         }
 
         $document
-            ->setField('eids', array('type' => DocumentInterface::TYPE_INTEGER, 'array' => true))
-            ->setField('tids', array('type' => DocumentInterface::TYPE_INTEGER, 'array' => true))
-            ->setField('siteroots', array('type' => DocumentInterface::TYPE_STRING, 'array' => true))
-            ->setField('languages', array('type' => DocumentInterface::TYPE_STRING, 'array' => true))
-            ->setField('restricted', array('type' => DocumentInterface::TYPE_BOOLEAN));
+            ->setField('typeIds', array('type' => DocumentInterface::TYPE_INTEGER, 'array' => true))
+            ->setField('nodeIds', array('type' => DocumentInterface::TYPE_INTEGER, 'array' => true))
+            ->setField('siterootIds', array('type' => DocumentInterface::TYPE_STRING, 'array' => true))
+            ->setField('languages', array('type' => DocumentInterface::TYPE_STRING, 'array' => true));
     }
 
     /**
@@ -74,8 +74,9 @@ class DocumentListener implements EventSubscriberInterface
      */
     public function onMapDocument(MapDocumentEvent $event)
     {
-        $mediaDocument = $event->getMediaDocument();
+        $mediaDocument = $event->getDocument();
+        $file = $event->getFile();
 
-        $this->documentMapper->applyPageDataToMediaDocument($mediaDocument);
+        $this->documentMapper->applyPageDataToMediaDocument($mediaDocument, $file);
     }
 }
