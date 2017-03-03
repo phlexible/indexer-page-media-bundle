@@ -16,7 +16,7 @@ use Elastica\Filter\Term;
 use Elastica\Query;
 use Elastica\Result;
 use Phlexible\Bundle\ElasticaBundle\Elastica\Index;
-use Phlexible\Bundle\IndexerPageBundle\Document\PageDocument;
+use Phlexible\Bundle\IndexerMediaBundle\Indexer\MediaDocumentDescriptor;
 use Phlexible\Bundle\IndexerPageMediaBundle\Event\MapDocumentEvent;
 use Phlexible\Bundle\IndexerPageMediaBundle\IndexerPageMediaEvents;
 use Phlexible\Bundle\IndexerMediaBundle\Document\MediaDocument;
@@ -109,11 +109,13 @@ class DocumentMapper
     /**
      * Add element information to document
      *
-     * @param MediaDocument $mediaDocument
-     * @param FileInterface $file
+     * @param MediaDocument           $mediaDocument
+     * @param MediaDocumentDescriptor $descriptor
      */
-    public function applyPageDataToMediaDocument(MediaDocument $mediaDocument, FileInterface $file)
+    public function applyPageDataToMediaDocument(MediaDocument $mediaDocument, MediaDocumentDescriptor $descriptor)
     {
+        $file = $descriptor->getFile();
+
         $fields = array('typeIds', 'nodeIds', 'siterootIds', 'languages');
 
         foreach ($fields as $field) {

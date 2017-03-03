@@ -53,6 +53,7 @@ class NodeListener implements EventSubscriberInterface
             IndexerEvents::STORAGE_UPDATE_DOCUMENT => 'onUpdateDocument',
         );
     }
+
     /**
      * @param SetNodeOfflineEvent $event
      */
@@ -96,7 +97,6 @@ class NodeListener implements EventSubscriberInterface
     {
         $job = new Job('indexer-page-media:update-element-data', array("--eid $eid"));
 
-        echo 'update queue item'.PHP_EOL;
         //$this->jobManager->updateQueueItem($job);
     }
 }

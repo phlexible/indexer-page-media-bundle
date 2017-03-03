@@ -75,8 +75,8 @@ class DocumentListener implements EventSubscriberInterface
     public function onMapDocument(MapDocumentEvent $event)
     {
         $mediaDocument = $event->getDocument();
-        $file = $event->getFile();
+        $descriptor = $event->getDescriptor();
 
-        $this->documentMapper->applyPageDataToMediaDocument($mediaDocument, $file);
+        $this->documentMapper->applyPageDataToMediaDocument($mediaDocument, $descriptor);
     }
 }
