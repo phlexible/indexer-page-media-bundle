@@ -16,28 +16,28 @@ use Phlexible\Bundle\IndexerBundle\IndexerEvents;
 use Phlexible\Bundle\IndexerMediaBundle\Event\MapDocumentEvent;
 use Phlexible\Bundle\IndexerMediaBundle\IndexerMediaEvents;
 use Phlexible\Bundle\IndexerBundle\Event\DocumentEvent;
-use Phlexible\Bundle\IndexerPageMediaBundle\Indexer\DocumentMapper;
 use Phlexible\Bundle\IndexerMediaBundle\Document\MediaDocument;
+use Phlexible\Bundle\IndexerPageMediaBundle\Mapper\PageToMediaMapper;
 use Symfony\Component\EventDispatcher\EventSubscriberInterface;
 
 /**
- * Document listener
+ * Media document listener
  *
  * @author Phillip Look <pl@brainbits.net>
  */
-class DocumentListener implements EventSubscriberInterface
+class MediaDocumentListener implements EventSubscriberInterface
 {
     /**
-     * @var DocumentMapper
+     * @var PageToMediaMapper
      */
-    private $documentMapper;
+    private $mapper;
 
     /**
-     * @param DocumentMapper $documentMapper
+     * @param PageToMediaMapper $mapper
      */
-    public function __construct(DocumentMapper $documentMapper)
+    public function __construct(PageToMediaMapper $mapper)
     {
-        $this->documentMapper = $documentMapper;
+        $this->mapper = $mapper;
     }
 
     /**
@@ -77,6 +77,6 @@ class DocumentListener implements EventSubscriberInterface
         $mediaDocument = $event->getDocument();
         $descriptor = $event->getDescriptor();
 
-        $this->documentMapper->applyPageDataToMediaDocument($mediaDocument, $descriptor);
+        $this->mapper->applyPageDataToMediaDocument($mediaDocument, $descriptor);
     }
 }

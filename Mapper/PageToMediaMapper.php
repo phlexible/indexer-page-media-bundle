@@ -9,7 +9,7 @@
  * file that was distributed with this source code.
  */
 
-namespace Phlexible\Bundle\IndexerPageMediaBundle\Indexer;
+namespace Phlexible\Bundle\IndexerPageMediaBundle\Mapper;
 
 use Doctrine\DBAL\Connection;
 use Elastica\Filter\Term;
@@ -30,11 +30,11 @@ use Phlexible\Component\Volume\VolumeManager;
 use Symfony\Component\EventDispatcher\EventDispatcherInterface;
 
 /**
- * Document mapper
+ * Page to media mapper
  *
  * @author Phillip Look <pl@brainbits.net>
  */
-class DocumentMapper
+class PageToMediaMapper
 {
     /**
      * @var Connection
@@ -124,7 +124,7 @@ class DocumentMapper
 
         $mediaType = $mediaDocument->get('media_type');
 
-        $eids = $this->fetchNodeIdsByUsage($mediaDocument, $file);
+        $eids = $this->fetchElementIdsByUsage($mediaDocument, $file);
 
         foreach ($eids as $eid) {
             $results = $this->findPageDocuments($eid);
@@ -133,10 +133,6 @@ class DocumentMapper
                 /* @var $result Result */
                 $siterootId = $result->getData()['siterootId'];
                 $siteroot   = $this->siterootManager->find($siterootId);
-
-                if (!$this->isAssetTypeIndexible($siteroot, $mediaType)) {
-                    continue;
-                }
 
                 if ($this->elementContainsFile($mediaDocument, $result, $siteroot)) {
                     $this->applyPageFields($mediaDocument, $result);
@@ -157,107 +153,19 @@ class DocumentMapper
     }
 
     /**
-     * Checks if a media file should be indexed.
-     *
-     * @param Siteroot $siteroot
-     * @param string   $type
-     *
-     * @return boolean
-     */
-    private function isAssetTypeIndexible(Siteroot $siteroot, $type)
-    {
-        return true;
-
-        // TODO: fix properties
-        $key = 'indexer.elements.media.' . strtolower($type);
-
-        $value = (boolean) $siteroot->getProperty($key);
-
-        return $value;
-    }
-
-    /**
-     * Checks if a media folders shoulb be scanned recursive.
-     *
-     * @param Siteroot $siteroot
-     *
-     * @return boolean
-     */
-    private function scanFolderRecursive(Siteroot $siteroot)
-    {
-        $value = (boolean) $siteroot->getProperty('indexer.elements.media.folder.recursiv');
-
-        return $value;
-    }
-
-    /**
-     * Checks if any media file should be indexed.
-     *
-     * @param Siteroot $siteroot
-     *
-     * @return boolean
-     */
-    private function isFileIndexingEnabled(Siteroot $siteroot)
-    {
-        return $this->isAssetTypeIndexible($siteroot, 'audio')
-            || $this->isAssetTypeIndexible($siteroot, 'document')
-            || $this->isAssetTypeIndexible($siteroot, 'flash')
-            || $this->isAssetTypeIndexible($siteroot, 'image')
-            || $this->isAssetTypeIndexible($siteroot, 'video');
-    }
-
-    /**
-     * Checks if a media file should be indexed (by field type).
-     *
-     * @param Siteroot $siteroot
-     * @param string   $type
-     *
-     * @return boolean
-     */
-    private function isFieldTypeIndexible(Siteroot $siteroot, $type)
-    {
-        $key = 'indexer.elements.media.field.' . strtolower($type);
-
-        $value = (bool) $siteroot->getProperty($key);
-
-        return $value;
-    }
-
-    /**
-     * Get all field types which should be indexed.
-     *
-     * @param Siteroot $siteroot
-     *
-     * @return array
-     */
-    private function getIndexibleFieldTypes(Siteroot $siteroot)
-    {
-        $fieldTypes = array('file', 'folder');
-
-        $indexibleFieldTypes = array();
-        foreach ($fieldTypes as $fieldType) {
-            if ($this->isFieldTypeIndexible($siteroot, $fieldType)) {
-                $indexibleFieldTypes[] = $fieldType;
-            }
-        }
-
-        return $indexibleFieldTypes;
-    }
-
-    /**
      * @param MediaDocument $mediaDocument
      * @param FileInterface $file
      *
      * @return array
      */
-    private function fetchNodeIdsByUsage(MediaDocument $mediaDocument, FileInterface $file)
+    private function fetchElementIdsByUsage(MediaDocument $mediaDocument, FileInterface $file)
     {
         $parentFolderIds = $mediaDocument->get('parent_folder_ids');
 
         $eids = array_unique(
             array_merge(
-                $this->fetchNodeIdsWhereFileIsUsedIn($file),
-                $this->fetchNodeIdsWhereParentFolderOfFileIsUsedIn($file, $parentFolderIds)
+                $this->fetchElementIdsWhereFileIsUsedIn($file),
+                $this->fetchElementIdsWhereParentFolderOfFileIsUsedIn($file, $parentFolderIds)
             )
         );
 
@@ -269,7 +177,7 @@ class DocumentMapper
      *
      * @return array
      */
-    private function fetchNodeIdsWhereFileIsUsedIn(FileInterface $file)
+    private function fetchElementIdsWhereFileIsUsedIn(FileInterface $file)
     {
         $fileUsages = $this->fileUsageManager->getUsedIn($file);
 
@@ -281,7 +189,7 @@ class DocumentMapper
      *
      * @return array
      */
-    private function fetchNodeIdsWhereParentFolderOfFileIsUsedIn(FileInterface $file, array $parentFolderIds)
+    private function fetchElementIdsWhereParentFolderOfFileIsUsedIn(FileInterface $file, array $parentFolderIds)
     {
         // TODO: weird
         return array();
@@ -324,21 +232,18 @@ class DocumentMapper
         $folderId        = $mediaDocument->get('folder_id');
         $fileId          = $mediaDocument->get('file_id');
         $fileVersion     = $mediaDocument->get('file_version');
-        $parentFolderIds = $mediaDocument->get('parent_folder_ids');
-
-
-        if ($this->scanFolderRecursive($siteroot)) {
-            $mediaIds   = $parentFolderIds;
-            $mediaIds[] = "$fileId;$fileVersion";
-        } else {
-            $mediaIds = array("$fileId;$fileVersion", $folderId);
-        }
 
         $qb = $this->connection->createQueryBuilder();
 
-        foreach ($mediaIds as $index => $mediaId) {
-            $mediaIds[$index] = $qb->expr()->literal($mediaId);
-        }
+        $mediaIds = array(
+            $qb->expr()->literal("$fileId;$fileVersion"),
+            $qb->expr()->literal($folderId)
+        );
+
+        $indexibleFieldTypes = array(
+            $qb->expr()->literal('file'),
+            $qb->expr()->literal('folder')
+        );
 
         $qb
             ->select('esv.id')
@@ -347,13 +252,9 @@ class DocumentMapper
             ->andWhere($qb->expr()->eq('esv.language', $qb->expr()->literal($language)))
             ->andWhere($qb->expr()->eq('esv.version', $onlineVersion))
             ->andWhere($qb->expr()->in('esv.content', $mediaIds))
+            ->andWhere($qb->expr()->in('esv.type', $indexibleFieldTypes))
             ->setMaxResults(1);
 
-        $indexibleFieldTypes = $this->getIndexibleFieldTypes($siteroot);
-
-        if (count($indexibleFieldTypes)) {
-            $qb->andWhere($qb->expr()->in('esv.type', $indexibleFieldTypes));
-        }
 
         $result = $this->connection->fetchAssoc($qb->getSQL());
 

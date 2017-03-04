@@ -95,8 +95,9 @@ class NodeListener implements EventSubscriberInterface
      */
     private function queueUpdateElementData($eid)
     {
-        $job = new Job('indexer-page-media:update-element-data', array("--eid $eid"));
+        $job = new Job('indexer-page-media:update-element-data', array($eid));
 
+        // TODO: enable
         //$this->jobManager->updateQueueItem($job);
     }
 }
