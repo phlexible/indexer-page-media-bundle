@@ -116,7 +116,7 @@ class PageToMediaMapper
     {
         $file = $descriptor->getFile();
 
-        $fields = array('typeIds', 'nodeIds', 'siterootIds', 'languages');
+        $fields = array('type_ids', 'node_ids', 'siteroot_ids', 'languages');
 
         foreach ($fields as $field) {
             $mediaDocument->set($field, '');
@@ -131,7 +131,7 @@ class PageToMediaMapper
 
             foreach ($results as $result) {
                 /* @var $result Result */
-                $siterootId = $result->getData()['siterootId'];
+                $siterootId = $result->getData()['siteroot_id'];
                 $siteroot   = $this->siterootManager->find($siterootId);
 
                 if ($this->elementContainsFile($mediaDocument, $result, $siteroot)) {
@@ -145,7 +145,7 @@ class PageToMediaMapper
     {
         $query = new Query();
         $filter = new Term();
-        $filter->setTerm('typeId', $nodeId);
+        $filter->setTerm('type_id', $nodeId);
         $query->setPostFilter($filter);
         $resultSet = $this->index->getType('page')->search($query);
 
@@ -216,10 +216,10 @@ class PageToMediaMapper
     private function elementContainsFile(MediaDocument $mediaDocument, Result $pageDocument, Siteroot $siteroot)
     {
         $data = $pageDocument->getData();
-        $siterootId = $data['siterootId'];
+        $siterootId = $data['siteroot_id'];
         $language = $data['language'];
-        $nodeId = $data['nodeId'];
-        $typeId = $data['typeId'];
+        $nodeId = $data['node_id'];
+        $typeId = $data['type_id'];
 
         $tree = $this->treeManager->getBySiteRootId($siterootId);
         $node = $tree->get($nodeId);
@@ -268,9 +268,9 @@ class PageToMediaMapper
     private function applyPageFields(MediaDocument $mediaDocument, Result $pageDocument)
     {
         $mapping = array(
-            'typeIds' => 'typeId',
-            'nodeIds' => 'nodeId',
-            'siterootIds' => 'siterootId',
+            'typeIds' => 'type_id',
+            'nodeIds' => 'node_id',
+            'siterootIds' => 'siteroot_id',
             'languages' => 'language',
         );
 

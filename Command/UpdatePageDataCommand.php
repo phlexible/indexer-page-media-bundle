@@ -13,6 +13,7 @@ namespace Phlexible\Bundle\IndexerPageMediaBundle\Command;
 
 use Phlexible\Bundle\IndexerBundle\Document\DocumentInterface;
 use Phlexible\Bundle\IndexerMediaBundle\Document\MediaDocument;
+use Phlexible\Bundle\IndexerPageMediaBundle\Mapper\PageToMediaMapper;
 use Phlexible\Bundle\MediaManagerBundle\Entity\FileUsage;
 use Symfony\Bundle\FrameworkBundle\Command\ContainerAwareCommand;
 use Symfony\Component\Console\Input\InputArgument;
@@ -26,6 +27,21 @@ use Symfony\Component\Console\Output\OutputInterface;
  */
 class UpdatePageDataCommand extends ContainerAwareCommand
 {
+    /**
+     * @var PageToMediaMapper
+     */
+    private $mapper;
+
+    /**
+     * @param PageToMediaMapper $mapper
+     */
+    public function __construct(PageToMediaMapper $mapper)
+    {
+        parent::__construct();
+
+        $this->mapper = $mapper;
+    }
+
     /**
      * {@inheritdoc}
      */
@@ -45,8 +61,6 @@ class UpdatePageDataCommand extends ContainerAwareCommand
     {
         $eid = $input->getArgument('eid');
 
-        $mediaMapper = $this->getContainer()->get('phlexible_indexer_page_media.mapper');
-
         $affectedDocuments = array_merge(
             $this->fetchDocumentsByFolderId($eid),
             $this->fetchDocumentsByFileId($eid),
@@ -57,7 +71,7 @@ class UpdatePageDataCommand extends ContainerAwareCommand
 
         foreach ($affectedDocuments as $document) {
             /* @var $document MediaDocument */
-            $mediaMapper->applyElementDataToMediaDocument($document);
+            $this->mediaMapper->applyElementDataToMediaDocument($document);
             unset($document['copy']);
             unset($document['score']);
             unset($document['cleantitle']);
@@ -71,7 +85,7 @@ class UpdatePageDataCommand extends ContainerAwareCommand
     /**
      * @return array of <indexer id> => <indexer document>
      */
-    protected function fetchDocumentsByFolderId($eid)
+    private function fetchDocumentsByFolderId($eid)
     {
         $folderUsage = $this->getContainer()->get('phlexible_element.folder_usage');
         $mediaQuery  = $this->getContainer()->get('phlexible_indexer_media.query');

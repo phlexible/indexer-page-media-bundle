@@ -75,7 +75,7 @@ class NodeListener implements EventSubscriberInterface
             return;
         }
 
-        $this->queueUpdateElementData($document->get('typeId'));
+        $this->queueUpdateElementData($document->get('type_id'));
     }
 
     /**

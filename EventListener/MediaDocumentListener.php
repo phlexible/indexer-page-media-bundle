@@ -63,9 +63,9 @@ class MediaDocumentListener implements EventSubscriberInterface
         }
 
         $document
-            ->setField('typeIds', array('type' => DocumentInterface::TYPE_INTEGER, 'array' => true))
-            ->setField('nodeIds', array('type' => DocumentInterface::TYPE_INTEGER, 'array' => true))
-            ->setField('siterootIds', array('type' => DocumentInterface::TYPE_STRING, 'array' => true))
+            ->setField('type_ids', array('type' => DocumentInterface::TYPE_INTEGER, 'array' => true))
+            ->setField('node_ids', array('type' => DocumentInterface::TYPE_INTEGER, 'array' => true))
+            ->setField('siteroot_ids', array('type' => DocumentInterface::TYPE_STRING, 'array' => true))
             ->setField('languages', array('type' => DocumentInterface::TYPE_STRING, 'array' => true));
     }
 
