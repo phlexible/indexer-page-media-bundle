@@ -88,9 +88,6 @@ class UpdatePageDataCommand extends ContainerAwareCommand
             $identity   = $document->getIdentity();
             $descriptor = $contentIdentifier->createDescriptorFromIdentity($identity);
             $mediaMapper->applyPageDataToMediaDocument($document, $descriptor);
-            unset($document['copy']);
-            unset($document['score']);
-            unset($document['cleantitle']);
         }
 
         $this->storeDocuments($affectedDocuments);
