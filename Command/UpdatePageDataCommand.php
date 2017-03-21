@@ -16,6 +16,8 @@ use Elastica\Filter\BoolAnd;
 use Elastica\Filter\Term;
 use Elastica\Index;
 use Elastica\Query;
+use Elastica\Result;
+use Phlexible\Bundle\IndexerBundle\Document\DocumentIdentity;
 use Phlexible\Bundle\IndexerBundle\Document\DocumentInterface;
 use Phlexible\Bundle\IndexerMediaBundle\Document\MediaDocument;
 use Phlexible\Bundle\IndexerMediaBundle\Indexer\MediaContentIdentifier;
@@ -34,22 +36,24 @@ use Symfony\Component\Console\Output\OutputInterface;
  * @author Phillip Look <pl@brainbits.net>
  * @author Jens Schulze <jdschulze@brainbits.net> (Migration to Phlexible 1.x)
  */
-class UpdatePageDataCommand extends ContainerAwareCommand {
+class UpdatePageDataCommand extends ContainerAwareCommand
+{
     /**
      * @var ElasticaMapper
      */
     private $elasticaMapper;
 
-    public function __construct($name = null)
-    {
-        parent::__construct($name);
-        $this->elasticaMapper = $this->getContainer()->get('phlexible_indexer_storage_elastica.elastica_mapper');
-    }
+    /**
+     * @var Index
+     */
+    private $searchIndex;
+
 
     /**
      * {@inheritdoc}
      */
-    protected function configure() {
+    protected function configure()
+    {
         $this
             ->setName('indexer-page-media:update-page-data')
             ->setDescription('Update media document with page data.')
@@ -59,11 +63,13 @@ class UpdatePageDataCommand extends ContainerAwareCommand {
     /**
      * {@inheritdoc}
      */
-    protected function execute(InputInterface $input, OutputInterface $output) {
-        $eid = $input->getArgument('eid');
+    protected function execute(InputInterface $input, OutputInterface $output)
+    {
+//        $this->elasticaMapper = $this->getContainer()->get('phlexible_indexer_page_media.page_to_media_mapper');
+        $this->elasticaMapper = $this->getContainer()->get('phlexible_indexer_storage_elastica.elastica_mapper');
+        $this->searchIndex    = $this->getContainer()->get('phlexible_elastica.index');
 
-        /** @var PageToMediaMapper $mediaMapper */
-        $mediaMapper = $this->getContainer()->get('phlexible_indexer_page_media.page_to_media_mapper');
+        $eid = $input->getArgument('eid');
 
         $affectedDocuments = array_merge(
             $this->fetchDocumentsByFileId($eid),
@@ -72,12 +78,15 @@ class UpdatePageDataCommand extends ContainerAwareCommand {
 
         $output->writeln('Number of affected documents: ' . count($affectedDocuments));
 
+        /** @var PageToMediaMapper $mediaMapper */
+        $mediaMapper = $this->getContainer()->get('phlexible_indexer_page_media.page_to_media_mapper');
         /** @var MediaContentIdentifier $contentIdentifier */
         $contentIdentifier = $this->getContainer()->get('phlexible_indexer_media.media_content_identifier');
 
         /* @var $document MediaDocument */
         foreach ($affectedDocuments as $document) {
-            $descriptor = $contentIdentifier->createDescriptorFromIdentity($document->getIdentity());
+            $identity   = $document->getIdentity();
+            $descriptor = $contentIdentifier->createDescriptorFromIdentity($identity);
             $mediaMapper->applyPageDataToMediaDocument($document, $descriptor);
             unset($document['copy']);
             unset($document['score']);
@@ -95,11 +104,10 @@ class UpdatePageDataCommand extends ContainerAwareCommand {
      *
      * @return DocumentInterface[]
      */
-    private function fetchDocumentsByFileId($eid) {
+    private function fetchDocumentsByFileId($eid)
+    {
         /** @var EntityManager $entityManager */
         $entityManager = $this->getContainer()->get('doctrine.orm.entity_manager');
-        /** @var Index $searchIndex */
-        $searchIndex = $this->getContainer()->get('phlexible_elastica.index');
 
         $result = [];
 
@@ -118,7 +126,7 @@ class UpdatePageDataCommand extends ContainerAwareCommand {
             $query  = (new Query([]))
                 ->setPostFilter($filter);
 
-            $elasticaResultSet = $searchIndex->search($query);
+            $elasticaResultSet = $this->searchIndex->search($query);
             $documents         = $this->elasticaMapper->mapResultSet($elasticaResultSet);
 
             /* @var $document DocumentInterface */
@@ -130,26 +138,33 @@ class UpdatePageDataCommand extends ContainerAwareCommand {
         return $result;
     }
 
+
     /**
+     * @param  int $eid
+     *
      * @return DocumentInterface[]
      */
-    protected function fetchDocumentsByEid($eid, OutputInterface $output) {
-        $mediaQuery = $this->getContainer()->get('phlexible_indexer_media.query');
-        $search     = $this->getContainer()->get('phlexible_indexer.search');
+    protected function fetchDocumentsByEid($eid)
+    {
+        $filter = (new BoolAnd())
+            ->addFilter(new Term(['typeIds' => $eid]));
+        $query  = (new Query([]))
+            ->setPostFilter($filter);
+
+        $elasticaResultSet = $this->searchIndex->search($query);
 
         $result = [];
 
-        $mediaQuery
-            ->parseInput('')
-            ->setFilters(['eids' => $eid]);
+        foreach ($elasticaResultSet as $elasticaResult) {
+            //FIXME: THIS IS SO DIRTY :(((
+            $hit            = $elasticaResult->getHit();
+            $hit['_type']   = MediaDocument::class;
+            $elasticaResult = new Result($hit);
 
-        $documents = $search->query($mediaQuery);
-
-        $queryJson = json_encode($query->toArray());
-
-        foreach ($documents as $document) {
             /* @var $document DocumentInterface */
-            $result[$document->getIdentifier()] = $document;
+            $document = $this->elasticaMapper->mapResult($elasticaResult);
+            $document->setIdentity(new DocumentIdentity($hit['_id']));
+            $result[] = $document;
         }
 
         return $result;
@@ -158,7 +173,8 @@ class UpdatePageDataCommand extends ContainerAwareCommand {
     /**
      * @param MediaDocument[] $documents
      */
-    private function storeDocuments(array $documents) {
+    private function storeDocuments(array $documents)
+    {
         /** @var ElasticaStorage $storage */
         $storage    = $this->getContainer()->get('phlexible_indexer_media.storage');
         $operations = $storage->createOperations();
