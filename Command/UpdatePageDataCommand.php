@@ -61,7 +61,7 @@ class UpdatePageDataCommand extends ContainerAwareCommand
     protected function execute(InputInterface $input, OutputInterface $output)
     {
         $this->elasticaMapper = $this->getContainer()->get('phlexible_indexer_storage_elastica.elastica_mapper');
-        $this->searchIndex    = $this->getContainer()->get('phlexible_elastica.index');
+        $this->searchIndex = $this->getContainer()->get('phlexible_elastica.index');
 
         $eid = $input->getArgument('eid');
 
@@ -91,7 +91,7 @@ class UpdatePageDataCommand extends ContainerAwareCommand
     private function fetchDocumentsFromDb($eid)
     {
         /* @var EntityManagerInterface $entityManager */
-        $entityManager       = $this->getContainer()->get('doctrine.orm.default_entity_manager');
+        $entityManager = $this->getContainer()->get('doctrine.orm.default_entity_manager');
         $fileUsageRepository = $entityManager->getRepository(FileUsage::class);
 
         $usage = $fileUsageRepository->findBy(['usageType' => 'element', 'usageId' => $eid]);
@@ -104,7 +104,7 @@ class UpdatePageDataCommand extends ContainerAwareCommand
                 continue;
             }
 
-            $_id          = 'media_'.$fileUsage->getFile()->getId().'_'.$fileUsage->getFile()->getVersion();
+            $_id = 'media_'.$fileUsage->getFile()->getId().'_'.$fileUsage->getFile()->getVersion();
             $result[$_id] = new DocumentIdentity($_id);
         }
 
@@ -120,7 +120,7 @@ class UpdatePageDataCommand extends ContainerAwareCommand
     {
         $filter = (new BoolAnd())
             ->addFilter(new Term(['typeIds' => $eid]));
-        $query  = (new Query([]))
+        $query = (new Query([]))
             ->setPostFilter($filter);
 
         $elasticaResultSet = $this->searchIndex->search($query);
@@ -128,7 +128,7 @@ class UpdatePageDataCommand extends ContainerAwareCommand
         $result = [];
 
         foreach ($elasticaResultSet as $elasticaResult) {
-            $hit                 = $elasticaResult->getHit();
+            $hit = $elasticaResult->getHit();
             $result[$hit['_id']] = new DocumentIdentity($hit['_id']);
         }
 
