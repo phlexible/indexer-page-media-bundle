@@ -16,21 +16,22 @@ use Elastica\Filter\Term;
 use Elastica\Query;
 use Elastica\Result;
 use Phlexible\Bundle\ElasticaBundle\Elastica\Index;
+use Phlexible\Bundle\IndexerMediaBundle\Document\MediaDocument;
 use Phlexible\Bundle\IndexerMediaBundle\Indexer\MediaDocumentDescriptor;
 use Phlexible\Bundle\IndexerPageMediaBundle\Event\MapDocumentEvent;
 use Phlexible\Bundle\IndexerPageMediaBundle\IndexerPageMediaEvents;
-use Phlexible\Bundle\IndexerMediaBundle\Document\MediaDocument;
+use Phlexible\Bundle\MediaManagerBundle\Entity\FolderUsage;
 use Phlexible\Bundle\SiterootBundle\Entity\Siteroot;
 use Phlexible\Bundle\SiterootBundle\Model\SiterootManagerInterface;
 use Phlexible\Bundle\TreeBundle\Tree\TreeManager;
 use Phlexible\Component\MediaManager\Usage\FileUsageManager;
 use Phlexible\Component\MediaManager\Usage\FolderUsageManager;
-use Phlexible\Component\Volume\Model\FileInterface;
+use Phlexible\Component\MediaManager\Volume\ExtendedFileInterface;
 use Phlexible\Component\Volume\VolumeManager;
 use Symfony\Component\EventDispatcher\EventDispatcherInterface;
 
 /**
- * Page to media mapper
+ * Page to media mapper.
  *
  * @author Phillip Look <pl@brainbits.net>
  */
@@ -47,6 +48,8 @@ class PageToMediaMapper
     private $dispatcher;
 
     /**
+     * TODO: NEVER USED!!!
+     *
      * @var VolumeManager
      */
     private $volumeManager;
@@ -79,7 +82,7 @@ class PageToMediaMapper
     /**
      * @param Connection               $connection
      * @param EventDispatcherInterface $dispatcher
-     * @param VolumeManager            $volumeManager
+     * @param VolumeManager            $volumeManager      NEVER USED!!!
      * @param TreeManager              $treeManager
      * @param FileUsageManager         $fileUsageManager
      * @param FolderUsageManager       $folderUsageManager
@@ -98,7 +101,7 @@ class PageToMediaMapper
     ) {
         $this->connection = $connection;
         $this->dispatcher = $dispatcher;
-        $this->volumeManager = $volumeManager;
+        $this->volumeManager = $volumeManager; // NEVER USED!!!
         $this->treeManager = $treeManager;
         $this->fileUsageManager = $fileUsageManager;
         $this->folderUsageManager = $folderUsageManager;
@@ -107,7 +110,7 @@ class PageToMediaMapper
     }
 
     /**
-     * Add element information to document
+     * Add element information to document.
      *
      * @param MediaDocument           $mediaDocument
      * @param MediaDocumentDescriptor $descriptor
@@ -116,7 +119,7 @@ class PageToMediaMapper
     {
         $file = $descriptor->getFile();
 
-        $fields = array('typeIds', 'nodeIds', 'siterootIds', 'languages');
+        $fields = ['typeIds', 'nodeIds', 'siterootIds', 'languages'];
 
         foreach ($fields as $field) {
             $mediaDocument->set($field, '');
@@ -132,7 +135,7 @@ class PageToMediaMapper
             foreach ($results as $result) {
                 /* @var $result Result */
                 $siterootId = $result->getData()['siterootId'];
-                $siteroot   = $this->siterootManager->find($siterootId);
+                $siteroot = $this->siterootManager->find($siterootId);
 
                 if ($this->elementContainsFile($mediaDocument, $result, $siteroot)) {
                     $this->applyPageFields($mediaDocument, $result);
@@ -153,12 +156,12 @@ class PageToMediaMapper
     }
 
     /**
-     * @param MediaDocument $mediaDocument
-     * @param FileInterface $file
+     * @param MediaDocument         $mediaDocument
+     * @param ExtendedFileInterface $file
      *
      * @return array
      */
-    private function fetchElementIdsByUsage(MediaDocument $mediaDocument, FileInterface $file)
+    private function fetchElementIdsByUsage(MediaDocument $mediaDocument, ExtendedFileInterface $file)
     {
         $parentFolderIds = $mediaDocument->get('parent_folder_ids');
 
@@ -173,11 +176,11 @@ class PageToMediaMapper
     }
 
     /**
-     * @param FileInterface $file
+     * @param ExtendedFileInterface $file
      *
      * @return array
      */
-    private function fetchElementIdsWhereFileIsUsedIn(FileInterface $file)
+    private function fetchElementIdsWhereFileIsUsedIn(ExtendedFileInterface $file)
     {
         $fileUsages = $this->fileUsageManager->getUsedIn($file);
 
@@ -185,18 +188,20 @@ class PageToMediaMapper
     }
 
     /**
-     * @param array $parentFolderIds
+     * @param ExtendedFileInterface $file
+     * @param string[]              $parentFolderIds
      *
      * @return array
      */
-    private function fetchElementIdsWhereParentFolderOfFileIsUsedIn(FileInterface $file, array $parentFolderIds)
+    private function fetchElementIdsWhereParentFolderOfFileIsUsedIn(ExtendedFileInterface $file, array $parentFolderIds)
     {
-        // TODO: weird
-        return array();
+        $eids = [];
+
+        // TODO: AS LONG AS WE DON'T KNOW WHY WE SHOULD NEED PARENT FOLDERS WE STOP RIGHT HERE!
+        return $eids;
 
         $folderUsages = $this->folderUsageManager->getUsedIn(FolderUsage::STATUS_ONLINE);
 
-        $eids = array();
         foreach ($folderUsages as $usage) {
             if (in_array($usage['folder_id'], $parentFolderIds)) {
                 $eids[] = $usage['usage_id'];
@@ -229,21 +234,21 @@ class PageToMediaMapper
             return false;
         }
 
-        $folderId        = $mediaDocument->get('folder_id');
-        $fileId          = $mediaDocument->get('file_id');
-        $fileVersion     = $mediaDocument->get('file_version');
+        $folderId = $mediaDocument->get('folder_id');
+        $fileId = $mediaDocument->get('file_id');
+        $fileVersion = $mediaDocument->get('file_version');
 
         $qb = $this->connection->createQueryBuilder();
 
-        $mediaIds = array(
+        $mediaIds = [
             $qb->expr()->literal("$fileId;$fileVersion"),
-            $qb->expr()->literal($folderId)
-        );
+            $qb->expr()->literal($folderId),
+        ];
 
-        $indexibleFieldTypes = array(
+        $indexibleFieldTypes = [
             $qb->expr()->literal('file'),
-            $qb->expr()->literal('folder')
-        );
+            $qb->expr()->literal('folder'),
+        ];
 
         $qb
             ->select('esv.id')
@@ -254,7 +259,6 @@ class PageToMediaMapper
             ->andWhere($qb->expr()->in('esv.content', $mediaIds))
             ->andWhere($qb->expr()->in('esv.type', $indexibleFieldTypes))
             ->setMaxResults(1);
-
 
         $result = $this->connection->fetchAssoc($qb->getSQL());
 
@@ -267,12 +271,12 @@ class PageToMediaMapper
      */
     private function applyPageFields(MediaDocument $mediaDocument, Result $pageDocument)
     {
-        $mapping = array(
+        $mapping = [
             'typeIds' => 'typeId',
             'nodeIds' => 'nodeId',
             'siterootIds' => 'siterootId',
             'languages' => 'language',
-        );
+        ];
 
         $this->mergeFields($mediaDocument, $pageDocument, $mapping);
 
@@ -300,11 +304,11 @@ class PageToMediaMapper
      */
     private function mergeField(MediaDocument $mediaDocument, $mediaField, Result $pageDocument, $elementField)
     {
-        $mediaValue   = $mediaDocument->get($mediaField);
+        $mediaValue = $mediaDocument->get($mediaField);
         if ($mediaValue) {
             $mediaValue = (array) $mediaValue;
         } else {
-            $mediaValue = array();
+            $mediaValue = [];
         }
         $elementValue = (array) $pageDocument->getData()[$elementField];
 

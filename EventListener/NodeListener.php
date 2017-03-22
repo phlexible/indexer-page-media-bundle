@@ -22,7 +22,7 @@ use Phlexible\Bundle\TreeBundle\TreeEvents;
 use Symfony\Component\EventDispatcher\EventSubscriberInterface;
 
 /**
- * Node listener
+ * Node listener.
  *
  * @author Phillip Look <pl@brainbits.net>
  */
@@ -46,12 +46,12 @@ class NodeListener implements EventSubscriberInterface
      */
     public static function getSubscribedEvents()
     {
-        return array(
+        return [
             TreeEvents::SET_NODE_OFFLINE => 'onSetNodeOffline',
             TreeEvents::DELETE_NODE => 'onDeleteNode',
             IndexerEvents::STORAGE_ADD_DOCUMENT => 'onUpdateDocument',
             IndexerEvents::STORAGE_UPDATE_DOCUMENT => 'onUpdateDocument',
-        );
+        ];
     }
 
     /**
@@ -95,9 +95,7 @@ class NodeListener implements EventSubscriberInterface
      */
     private function queueUpdateElementData($eid)
     {
-        $job = new Job('indexer-page-media:update-element-data', array($eid));
-
-        // TODO: enable
-        //$this->jobManager->updateQueueItem($job);
+        $job = new Job('indexer-page-media:update-page-data', [$eid]);
+        $this->jobManager->addJob($job);
     }
 }
