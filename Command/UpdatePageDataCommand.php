@@ -27,7 +27,7 @@ use Symfony\Component\Console\Input\InputInterface;
 use Symfony\Component\Console\Output\OutputInterface;
 
 /**
- * Update page data job
+ * Update page data job.
  *
  * @author Phillip Look <pl@brainbits.net>
  * @author Jens Schulze <jdschulze@brainbits.net> (Migration to Phlexible 1.x)
@@ -70,7 +70,7 @@ class UpdatePageDataCommand extends ContainerAwareCommand
             $this->fetchDocumentsFromIndex($eid)
         );
 
-        $output->writeln('Number of affected documents (all languages): ' . count($affectedDocumentIdentities));
+        $output->writeln('Number of affected documents (all languages): '.count($affectedDocumentIdentities));
 
         /* @var MediaIndexer $mediaIndexer */
         $mediaIndexer = $this->getContainer()->get('phlexible_indexer_media.media_indexer');
@@ -104,7 +104,7 @@ class UpdatePageDataCommand extends ContainerAwareCommand
                 continue;
             }
 
-            $_id          = 'media_' . $fileUsage->getFile()->getId() . '_' . $fileUsage->getFile()->getVersion();
+            $_id          = 'media_'.$fileUsage->getFile()->getId().'_'.$fileUsage->getFile()->getVersion();
             $result[$_id] = new DocumentIdentity($_id);
         }
 
@@ -135,4 +135,3 @@ class UpdatePageDataCommand extends ContainerAwareCommand
         return $result;
     }
 }
-
