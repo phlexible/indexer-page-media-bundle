@@ -12,11 +12,11 @@
 namespace Phlexible\Bundle\IndexerPageMediaBundle\EventListener;
 
 use Phlexible\Bundle\IndexerBundle\Document\DocumentInterface;
+use Phlexible\Bundle\IndexerBundle\Event\DocumentEvent;
 use Phlexible\Bundle\IndexerBundle\IndexerEvents;
+use Phlexible\Bundle\IndexerMediaBundle\Document\MediaDocument;
 use Phlexible\Bundle\IndexerMediaBundle\Event\MapDocumentEvent;
 use Phlexible\Bundle\IndexerMediaBundle\IndexerMediaEvents;
-use Phlexible\Bundle\IndexerBundle\Event\DocumentEvent;
-use Phlexible\Bundle\IndexerMediaBundle\Document\MediaDocument;
 use Phlexible\Bundle\IndexerPageMediaBundle\Mapper\PageToMediaMapper;
 use Symfony\Component\EventDispatcher\EventSubscriberInterface;
 
