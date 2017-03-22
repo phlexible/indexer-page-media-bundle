@@ -82,7 +82,7 @@ class PageToMediaMapper
     /**
      * @param Connection               $connection
      * @param EventDispatcherInterface $dispatcher
-     * @param VolumeManager            $volumeManager NEVER USED!!!
+     * @param VolumeManager            $volumeManager      NEVER USED!!!
      * @param TreeManager              $treeManager
      * @param FileUsageManager         $fileUsageManager
      * @param FolderUsageManager       $folderUsageManager
@@ -263,7 +263,7 @@ class PageToMediaMapper
 
         $result = $this->connection->fetchAssoc($qb->getSQL());
 
-        return (bool)$result;
+        return (bool) $result;
     }
 
     /**
@@ -307,11 +307,11 @@ class PageToMediaMapper
     {
         $mediaValue = $mediaDocument->get($mediaField);
         if ($mediaValue) {
-            $mediaValue = (array)$mediaValue;
+            $mediaValue = (array) $mediaValue;
         } else {
             $mediaValue = [];
         }
-        $elementValue = (array)$pageDocument->getData()[$elementField];
+        $elementValue = (array) $pageDocument->getData()[$elementField];
 
         $newValue = array_unique(array_merge($mediaValue, $elementValue));
 
