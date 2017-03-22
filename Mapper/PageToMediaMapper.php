@@ -259,7 +259,7 @@ class PageToMediaMapper
             ->andWhere($qb->expr()->in('esv.content', $mediaIds))
             ->andWhere($qb->expr()->in('esv.type', $indexibleFieldTypes))
             ->setMaxResults(1);
-        
+
         $result = $this->connection->fetchAssoc($qb->getSQL());
 
         return (bool) $result;
