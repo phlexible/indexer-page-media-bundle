@@ -11,19 +11,15 @@
 
 namespace Phlexible\Bundle\IndexerPageMediaBundle\Command;
 
-use Doctrine\ORM\EntityManager;
+use Doctrine\ORM\EntityManagerInterface;
 use Elastica\Filter\BoolAnd;
 use Elastica\Filter\Term;
 use Elastica\Index;
 use Elastica\Query;
-use Elastica\Result;
 use Phlexible\Bundle\IndexerBundle\Document\DocumentIdentity;
-use Phlexible\Bundle\IndexerBundle\Document\DocumentInterface;
 use Phlexible\Bundle\IndexerMediaBundle\Document\MediaDocument;
-use Phlexible\Bundle\IndexerMediaBundle\Indexer\MediaContentIdentifier;
-use Phlexible\Bundle\IndexerPageMediaBundle\Mapper\PageToMediaMapper;
+use Phlexible\Bundle\IndexerMediaBundle\Indexer\MediaIndexer;
 use Phlexible\Bundle\IndexerStorageElasticaBundle\Storage\ElasticaMapper;
-use Phlexible\Bundle\IndexerStorageElasticaBundle\Storage\ElasticaStorage;
 use Phlexible\Bundle\MediaManagerBundle\Entity\FileUsage;
 use Symfony\Bundle\FrameworkBundle\Command\ContainerAwareCommand;
 use Symfony\Component\Console\Input\InputArgument;
@@ -48,7 +44,6 @@ class UpdatePageDataCommand extends ContainerAwareCommand
      */
     private $searchIndex;
 
-
     /**
      * {@inheritdoc}
      */
@@ -65,52 +60,43 @@ class UpdatePageDataCommand extends ContainerAwareCommand
      */
     protected function execute(InputInterface $input, OutputInterface $output)
     {
-//        $this->elasticaMapper = $this->getContainer()->get('phlexible_indexer_page_media.page_to_media_mapper');
         $this->elasticaMapper = $this->getContainer()->get('phlexible_indexer_storage_elastica.elastica_mapper');
         $this->searchIndex    = $this->getContainer()->get('phlexible_elastica.index');
 
         $eid = $input->getArgument('eid');
 
-        $affectedDocuments = array_merge(
-            $this->fetchDocumentsByFileId($eid),
-            $this->fetchDocumentsByEid($eid)
+        $affectedDocumentIdentities = array_merge(
+            $this->fetchDocumentsFromDb($eid),
+            $this->fetchDocumentsFromIndex($eid)
         );
 
-        $output->writeln('Number of affected documents: ' . count($affectedDocuments));
+        $output->writeln('Number of affected documents (all languages): ' . count($affectedDocumentIdentities));
 
-        /** @var PageToMediaMapper $mediaMapper */
-        $mediaMapper = $this->getContainer()->get('phlexible_indexer_page_media.page_to_media_mapper');
-        /** @var MediaContentIdentifier $contentIdentifier */
-        $contentIdentifier = $this->getContainer()->get('phlexible_indexer_media.media_content_identifier');
+        /* @var MediaIndexer $mediaIndexer */
+        $mediaIndexer = $this->getContainer()->get('phlexible_indexer_media.media_indexer');
 
         /* @var $document MediaDocument */
-        foreach ($affectedDocuments as $document) {
-            $identity   = $document->getIdentity();
-            $descriptor = $contentIdentifier->createDescriptorFromIdentity($identity);
-            $mediaMapper->applyPageDataToMediaDocument($document, $descriptor);
+        foreach ($affectedDocumentIdentities as $documentIdentity) {
+            $mediaIndexer->update($documentIdentity);
         }
-
-        $this->storeDocuments($affectedDocuments);
 
         return 0;
     }
 
-
     /**
      * @param int $eid
      *
-     * @return DocumentInterface[]
+     * @return DocumentIdentity[]
      */
-    private function fetchDocumentsByFileId($eid)
+    private function fetchDocumentsFromDb($eid)
     {
-        /** @var EntityManager $entityManager */
-        $entityManager = $this->getContainer()->get('doctrine.orm.entity_manager');
-
-        $result = [];
-
-        $fileUsageRepository = $entityManager->getRepository('PhlexibleMediaManagerBundle:FileUsage');
+        /* @var EntityManagerInterface $entityManager */
+        $entityManager       = $this->getContainer()->get('doctrine.orm.default_entity_manager');
+        $fileUsageRepository = $entityManager->getRepository(FileUsage::class);
 
         $usage = $fileUsageRepository->findBy(['usageType' => 'element', 'usageId' => $eid]);
+
+        $result = [];
 
         /** @var FileUsage $fileUsage */
         foreach ($usage as $fileUsage) {
@@ -118,30 +104,19 @@ class UpdatePageDataCommand extends ContainerAwareCommand
                 continue;
             }
 
-            $filter = (new BoolAnd())
-                ->addFilter(new Term(['file_id' => $fileUsage->getId()]));
-            $query  = (new Query([]))
-                ->setPostFilter($filter);
-
-            $elasticaResultSet = $this->searchIndex->search($query);
-            $documents         = $this->elasticaMapper->mapResultSet($elasticaResultSet);
-
-            /* @var $document DocumentInterface */
-            foreach ($documents as $document) {
-                $result[] = $document;
-            }
+            $_id          = 'media_' . $fileUsage->getFile()->getId() . '_' . $fileUsage->getFile()->getVersion();
+            $result[$_id] = new DocumentIdentity($_id);
         }
 
         return $result;
     }
 
-
     /**
-     * @param  int $eid
+     * @param int $eid
      *
-     * @return DocumentInterface[]
+     * @return DocumentIdentity[]
      */
-    protected function fetchDocumentsByEid($eid)
+    protected function fetchDocumentsFromIndex($eid)
     {
         $filter = (new BoolAnd())
             ->addFilter(new Term(['typeIds' => $eid]));
@@ -153,32 +128,11 @@ class UpdatePageDataCommand extends ContainerAwareCommand
         $result = [];
 
         foreach ($elasticaResultSet as $elasticaResult) {
-            //FIXME: THIS IS SO DIRTY :(((
-            $hit            = $elasticaResult->getHit();
-            $hit['_type']   = MediaDocument::class;
-            $elasticaResult = new Result($hit);
-
-            /* @var $document DocumentInterface */
-            $document = $this->elasticaMapper->mapResult($elasticaResult);
-            $document->setIdentity(new DocumentIdentity($hit['_id']));
-            $result[] = $document;
+            $hit                 = $elasticaResult->getHit();
+            $result[$hit['_id']] = new DocumentIdentity($hit['_id']);
         }
 
         return $result;
-    }
-
-    /**
-     * @param MediaDocument[] $documents
-     */
-    private function storeDocuments(array $documents)
-    {
-        /** @var ElasticaStorage $storage */
-        $storage    = $this->getContainer()->get('phlexible_indexer_media.storage');
-        $operations = $storage->createOperations();
-        foreach ($documents as $document) {
-            $operations->updateDocument($document);
-        }
-        $storage->execute($operations);
     }
 }
 
