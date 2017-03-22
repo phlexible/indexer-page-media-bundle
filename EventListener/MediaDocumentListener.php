@@ -21,7 +21,7 @@ use Phlexible\Bundle\IndexerPageMediaBundle\Mapper\PageToMediaMapper;
 use Symfony\Component\EventDispatcher\EventSubscriberInterface;
 
 /**
- * Media document listener
+ * Media document listener.
  *
  * @author Phillip Look <pl@brainbits.net>
  */
@@ -45,10 +45,10 @@ class MediaDocumentListener implements EventSubscriberInterface
      */
     public static function getSubscribedEvents()
     {
-        return array(
+        return [
             IndexerEvents::CREATE_DOCUMENT => 'onCreateDocument',
             IndexerMediaEvents::MAP_DOCUMENT => 'onMapDocument',
-        );
+        ];
     }
 
     /**
@@ -63,10 +63,10 @@ class MediaDocumentListener implements EventSubscriberInterface
         }
 
         $document
-            ->setField('typeIds', array('type' => DocumentInterface::TYPE_INTEGER, 'array' => true))
-            ->setField('nodeIds', array('type' => DocumentInterface::TYPE_INTEGER, 'array' => true))
-            ->setField('siterootIds', array('type' => DocumentInterface::TYPE_STRING, 'array' => true))
-            ->setField('languages', array('type' => DocumentInterface::TYPE_STRING, 'array' => true));
+            ->setField('typeIds', ['type' => DocumentInterface::TYPE_INTEGER, 'array' => true])
+            ->setField('nodeIds', ['type' => DocumentInterface::TYPE_INTEGER, 'array' => true])
+            ->setField('siterootIds', ['type' => DocumentInterface::TYPE_STRING, 'array' => true])
+            ->setField('languages', ['type' => DocumentInterface::TYPE_STRING, 'array' => true]);
     }
 
     /**
