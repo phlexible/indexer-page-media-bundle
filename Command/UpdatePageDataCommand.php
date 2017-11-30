@@ -12,10 +12,10 @@
 namespace Phlexible\Bundle\IndexerPageMediaBundle\Command;
 
 use Doctrine\ORM\EntityManagerInterface;
-use Elastica\Filter\BoolAnd;
-use Elastica\Filter\Term;
 use Elastica\Index;
 use Elastica\Query;
+use Elastica\Query\BoolQuery;
+use Elastica\Query\Term;
 use Phlexible\Bundle\IndexerBundle\Document\DocumentIdentity;
 use Phlexible\Bundle\IndexerMediaBundle\Document\MediaDocument;
 use Phlexible\Bundle\IndexerMediaBundle\Indexer\MediaIndexer;
@@ -118,10 +118,12 @@ class UpdatePageDataCommand extends ContainerAwareCommand
      */
     protected function fetchDocumentsFromIndex($eid)
     {
-        $filter = (new BoolAnd())
-            ->addFilter(new Term(['typeIds' => $eid]));
-        $query = (new Query([]))
-            ->setPostFilter($filter);
+        $filter = new BoolQuery();
+        $filter->addMust(new Term(['typeIds' => $eid]));
+
+        $query = new Query([]);
+        $query->setFrom(0);
+        $query->setPostFilter($filter);
 
         $elasticaResultSet = $this->searchIndex->search($query);
 
